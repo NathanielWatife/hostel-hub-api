@@ -40,7 +40,7 @@ const auth = async (req, res, next) => {
   }
 };
 
-const adminAuth = (req, res, next) => {
+const staffAuth = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
@@ -50,4 +50,4 @@ const adminAuth = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, adminAuth };
+module.exports = { auth, staffAuth };

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  universityId: {
+  matricNo: {
     type: String,
     required: [true, 'University ID is required'],
     unique: true,

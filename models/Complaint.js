@@ -32,6 +32,7 @@ const complaintSchema = new mongoose.Schema({
     block: { 
       type: String, 
       required: [true, 'Block is required'],
+      trim: true,
       uppercase: true
     },
     floor: { 
@@ -88,7 +89,7 @@ const complaintSchema = new mongoose.Schema({
 // Generate ticket number before saving
 complaintSchema.pre('save', async function(next) {
   if (this.isNew) {
-    const count = await this.constructor.countDocuments();
+    const count = await mongoose.model('Complaint').countDocuments();
     const prefix = 'HOSTEL';
     const year = new Date().getFullYear();
     const sequential = (count + 1).toString().padStart(4, '0');

@@ -4,9 +4,9 @@ const FoundItem = require('../models/FoundItem');
 // @desc    Get all lost items
 // @route   GET /api/lost-found/lost
 // @access  Private
-const getLostItems = async (req, res) => {
+exports.getLostItems = async (req, res) => {
   try {
-    const { status, category, limit = 10 } = req.query;
+    const { status, category, limit = 50 } = req.query;
     
     const filter = {};
     if (status) filter.status = status;
@@ -19,13 +19,13 @@ const getLostItems = async (req, res) => {
 
     res.json({
       success: true,
-      lostItems
+      data: lostItems
     });
   } catch (error) {
+    console.error('Get lost items error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching lost items',
-      error: error.message
+      message: 'Server error while fetching lost items'
     });
   }
 };
@@ -33,9 +33,9 @@ const getLostItems = async (req, res) => {
 // @desc    Get all found items
 // @route   GET /api/lost-found/found
 // @access  Private
-const getFoundItems = async (req, res) => {
+exports.getFoundItems = async (req, res) => {
   try {
-    const { status, category, limit = 10 } = req.query;
+    const { status, category, limit = 50 } = req.query;
     
     const filter = {};
     if (status) filter.status = status;
@@ -43,18 +43,19 @@ const getFoundItems = async (req, res) => {
 
     const foundItems = await FoundItem.find(filter)
       .populate('userId', 'fullName')
+      .populate('claimedBy', 'fullName')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
     res.json({
       success: true,
-      foundItems
+      data: foundItems
     });
   } catch (error) {
+    console.error('Get found items error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching found items',
-      error: error.message
+      message: 'Server error while fetching found items'
     });
   }
 };
@@ -62,25 +63,52 @@ const getFoundItems = async (req, res) => {
 // @desc    Report lost item
 // @route   POST /api/lost-found/lost
 // @access  Private
-const reportLostItem = async (req, res) => {
+exports.reportLost = async (req, res) => {
   try {
+    const {
+      category,
+      itemName,
+      description,
+      brand,
+      color,
+      locationLost,
+      dateLost,
+      identifyingFeatures
+    } = req.body;
+
     const lostItem = await LostItem.create({
       userId: req.user._id,
-      ...req.body,
-      images: req.files ? req.files.map(file => file.path) : []
+      category,
+      itemName,
+      description,
+      brand,
+      color,
+      locationLost,
+      dateLost,
+      identifyingFeatures
     });
 
     await lostItem.populate('userId', 'fullName');
 
     res.status(201).json({
       success: true,
-      lostItem
+      data: lostItem
     });
   } catch (error) {
+    console.error('Report lost item error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error reporting lost item',
-      error: error.message
+      message: 'Server error while reporting lost item'
     });
   }
 };
@@ -88,25 +116,54 @@ const reportLostItem = async (req, res) => {
 // @desc    Report found item
 // @route   POST /api/lost-found/found
 // @access  Private
-const reportFoundItem = async (req, res) => {
+exports.reportFound = async (req, res) => {
   try {
+    const {
+      category,
+      itemName,
+      description,
+      brand,
+      color,
+      locationFound,
+      dateFound,
+      currentCustody,
+      contactInfo
+    } = req.body;
+
     const foundItem = await FoundItem.create({
       userId: req.user._id,
-      ...req.body,
-      images: req.files ? req.files.map(file => file.path) : []
+      category,
+      itemName,
+      description,
+      brand,
+      color,
+      locationFound,
+      dateFound,
+      currentCustody,
+      contactInfo
     });
 
     await foundItem.populate('userId', 'fullName');
 
     res.status(201).json({
       success: true,
-      foundItem
+      data: foundItem
     });
   } catch (error) {
+    console.error('Report found item error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error reporting found item',
-      error: error.message
+      message: 'Server error while reporting found item'
     });
   }
 };
@@ -114,10 +171,8 @@ const reportFoundItem = async (req, res) => {
 // @desc    Claim found item
 // @route   PUT /api/lost-found/found/:id/claim
 // @access  Private
-const claimFoundItem = async (req, res) => {
+exports.claimItem = async (req, res) => {
   try {
-    const { proofOfOwnership, additionalDetails } = req.body;
-
     const foundItem = await FoundItem.findById(req.params.id);
 
     if (!foundItem) {
@@ -134,23 +189,24 @@ const claimFoundItem = async (req, res) => {
       });
     }
 
+    // Update the found item status
     foundItem.status = 'claimed';
     foundItem.claimedBy = req.user._id;
     await foundItem.save();
 
     await foundItem.populate('userId', 'fullName');
-    await foundItem.populate('claimedBy', 'fullName matricNo');
+    await foundItem.populate('claimedBy', 'fullName');
 
     res.json({
       success: true,
       message: 'Item claimed successfully',
-      foundItem
+      data: foundItem
     });
   } catch (error) {
+    console.error('Claim item error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error claiming item',
-      error: error.message
+      message: 'Server error while claiming item'
     });
   }
 };
@@ -158,60 +214,75 @@ const claimFoundItem = async (req, res) => {
 // @desc    Get matching suggestions
 // @route   GET /api/lost-found/matches
 // @access  Private
-const getMatches = async (req, res) => {
+exports.getMatches = async (req, res) => {
   try {
-    // Simple matching based on category and item name
-    const lostItems = await LostItem.find({ status: 'lost' });
-    const foundItems = await FoundItem.find({ status: 'found' });
+    // Simple matching based on category and item name similarity
+    const lostItems = await LostItem.find({ status: 'lost' })
+      .populate('userId', 'fullName');
+    
+    const foundItems = await FoundItem.find({ status: 'found' })
+      .populate('userId', 'fullName');
 
     const matches = [];
 
-    for (const lostItem of lostItems) {
-      for (const foundItem of foundItems) {
+    // Basic matching logic (you can enhance this)
+    lostItems.forEach(lostItem => {
+      foundItems.forEach(foundItem => {
         if (lostItem.category === foundItem.category) {
-          const nameSimilarity = calculateSimilarity(
-            lostItem.itemName.toLowerCase(),
-            foundItem.itemName.toLowerCase()
-          );
-
-          if (nameSimilarity > 0.6) { // 60% similarity threshold
+          const lostName = lostItem.itemName.toLowerCase();
+          const foundName = foundItem.itemName.toLowerCase();
+          
+          // Simple similarity check
+          if (lostName.includes(foundName) || foundName.includes(lostName)) {
             matches.push({
               lostItem,
               foundItem,
-              confidence: nameSimilarity
+              confidence: 0.7 // Basic confidence score
             });
           }
         }
-      }
-    }
+      });
+    });
 
     res.json({
       success: true,
-      matches
+      data: matches
     });
   } catch (error) {
+    console.error('Get matches error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error finding matches',
-      error: error.message
+      message: 'Server error while finding matches'
     });
   }
 };
 
-// Helper function for string similarity
-function calculateSimilarity(str1, str2) {
-  const words1 = str1.split(' ');
-  const words2 = str2.split(' ');
-  
-  const commonWords = words1.filter(word => words2.includes(word));
-  return commonWords.length / Math.max(words1.length, words2.length);
-}
+// @desc    Get user's lost/found items
+// @route   GET /api/lost-found/user/my-items
+// @access  Private
+exports.getMyItems = async (req, res) => {
+  try {
+    const lostItems = await LostItem.find({ userId: req.user._id })
+      .populate('userId', 'fullName')
+      .sort({ createdAt: -1 });
 
-module.exports = {
-  getLostItems,
-  getFoundItems,
-  reportLostItem,
-  reportFoundItem,
-  claimFoundItem,
-  getMatches
+    const foundItems = await FoundItem.find({ userId: req.user._id })
+      .populate('userId', 'fullName')
+      .populate('claimedBy', 'fullName')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        lostItems,
+        foundItems
+      }
+    });
+  } catch (error) {
+    console.error('Get my items error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user items'
+    });
+  }
 };

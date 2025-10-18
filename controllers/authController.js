@@ -15,11 +15,11 @@ exports.register = async (req, res) => {
   try {
     console.log('Registration request received:', req.body);
     
-    const { universityId, email, password, fullName, hostelBlock, roomNumber, phone } = req.body;
+    const { matricNo, email, password, fullName, hostelBlock, roomNumber, phone } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ universityId }, { email }]
+      $or: [{ matricNo }, { email }]
     });
 
     if (existingUser) {
@@ -31,7 +31,7 @@ exports.register = async (req, res) => {
 
     // Create user
     const user = await User.create({
-      universityId: universityId.toUpperCase(),
+      matricNo: matricNo.toUpperCase(),
       email: email.toLowerCase(),
       password,
       fullName,
@@ -84,10 +84,10 @@ exports.register = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { universityId, password } = req.body;
+    const { matricNo, password } = req.body;
 
     // Validate input
-    if (!universityId || !password) {
+    if (!matricNo || !password) {
       return res.status(400).json({
         success: false,
         message: 'Please provide university ID and password'
@@ -96,7 +96,7 @@ exports.login = async (req, res) => {
 
     // Check if user exists and is active
     const user = await User.findOne({ 
-      universityId: universityId.toUpperCase(),
+      matricNo: matricNo.toUpperCase(),
       isActive: true 
     });
 

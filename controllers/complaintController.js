@@ -3,19 +3,18 @@ const Complaint = require('../models/Complaint');
 // @desc    Get all complaints
 // @route   GET /api/complaints
 // @access  Private
-const getComplaints = async (req, res) => {
+exports.getAllComplaints = async (req, res) => {
   try {
     const { status, category, priority, page = 1, limit = 10 } = req.query;
     
     // Build filter object
     const filter = {};
-    
     if (status) filter.status = status;
     if (category) filter.category = category;
     if (priority) filter.priority = priority;
-    
-    // For non-admin users, only show their complaints or public information
-    if (req.user.role === 'student') {
+
+    // If user is not admin, only show their complaints
+    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
       filter.userId = req.user._id;
     }
 
@@ -31,7 +30,7 @@ const getComplaints = async (req, res) => {
 
     res.json({
       success: true,
-      complaints,
+      data: complaints,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -40,10 +39,10 @@ const getComplaints = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Get complaints error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching complaints',
-      error: error.message
+      message: 'Server error while fetching complaints'
     });
   }
 };
@@ -51,12 +50,12 @@ const getComplaints = async (req, res) => {
 // @desc    Get single complaint
 // @route   GET /api/complaints/:id
 // @access  Private
-const getComplaint = async (req, res) => {
+exports.getComplaint = async (req, res) => {
   try {
     const complaint = await Complaint.findById(req.params.id)
-      .populate('userId', 'fullName matricNo hostelBlock roomNumber')
-      .populate('assignedTo', 'fullName email')
-      .populate('comments.user', 'fullName role');
+      .populate('userId', 'fullName matricNo')
+      .populate('assignedTo', 'fullName')
+      .populate('comments.user', 'fullName');
 
     if (!complaint) {
       return res.status(404).json({
@@ -66,7 +65,8 @@ const getComplaint = async (req, res) => {
     }
 
     // Check if user has access to this complaint
-    if (req.user.role === 'student' && complaint.userId._id.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && 
+        complaint.userId._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this complaint'
@@ -75,21 +75,21 @@ const getComplaint = async (req, res) => {
 
     res.json({
       success: true,
-      complaint
+      data: complaint
     });
   } catch (error) {
+    console.error('Get complaint error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching complaint',
-      error: error.message
+      message: 'Server error while fetching complaint'
     });
   }
 };
 
-// @desc    Create complaint
+// @desc    Create new complaint
 // @route   POST /api/complaints
 // @access  Private
-const createComplaint = async (req, res) => {
+exports.createComplaint = async (req, res) => {
   try {
     const { category, title, description, location, priority, anonymous } = req.body;
 
@@ -100,21 +100,31 @@ const createComplaint = async (req, res) => {
       description,
       location,
       priority,
-      anonymous,
-      images: req.files ? req.files.map(file => file.path) : []
+      anonymous
     });
 
+    // Populate the user data for response
     await complaint.populate('userId', 'fullName matricNo');
 
     res.status(201).json({
       success: true,
-      complaint
+      data: complaint
     });
   } catch (error) {
+    console.error('Create complaint error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error creating complaint',
-      error: error.message
+      message: 'Server error while creating complaint'
     });
   }
 };
@@ -122,7 +132,7 @@ const createComplaint = async (req, res) => {
 // @desc    Update complaint
 // @route   PUT /api/complaints/:id
 // @access  Private
-const updateComplaint = async (req, res) => {
+exports.updateComplaint = async (req, res) => {
   try {
     let complaint = await Complaint.findById(req.params.id);
 
@@ -133,38 +143,63 @@ const updateComplaint = async (req, res) => {
       });
     }
 
-    // Check permissions
-    if (req.user.role === 'student' && complaint.userId.toString() !== req.user._id.toString()) {
+    // Check if user has permission to update
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && 
+        complaint.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to update this complaint'
       });
     }
 
+    // Define allowed fields for update based on user role
+    const allowedFields = ['title', 'description', 'priority'];
+    if (req.user.role === 'admin' || req.user.role === 'staff') {
+      allowedFields.push('status', 'assignedTo', 'category');
+    }
+
+    const updateData = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
     complaint = await Complaint.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     ).populate('userId', 'fullName matricNo')
-     .populate('assignedTo', 'fullName');
+     .populate('assignedTo', 'fullName')
+     .populate('comments.user', 'fullName');
 
     res.json({
       success: true,
-      complaint
+      data: complaint
     });
   } catch (error) {
+    console.error('Update complaint error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error updating complaint',
-      error: error.message
+      message: 'Server error while updating complaint'
     });
   }
 };
 
 // @desc    Update complaint status
 // @route   PUT /api/complaints/:id/status
-// @access  Private (Staff/Admin)
-const updateComplaintStatus = async (req, res) => {
+// @access  Private/Admin/Staff
+exports.updateComplaintStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
@@ -173,7 +208,8 @@ const updateComplaintStatus = async (req, res) => {
       { status },
       { new: true, runValidators: true }
     ).populate('userId', 'fullName matricNo')
-     .populate('assignedTo', 'fullName');
+     .populate('assignedTo', 'fullName')
+     .populate('comments.user', 'fullName');
 
     if (!complaint) {
       return res.status(404).json({
@@ -184,13 +220,23 @@ const updateComplaintStatus = async (req, res) => {
 
     res.json({
       success: true,
-      complaint
+      data: complaint
     });
   } catch (error) {
+    console.error('Update status error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error updating complaint status',
-      error: error.message
+      message: 'Server error while updating status'
     });
   }
 };
@@ -198,7 +244,7 @@ const updateComplaintStatus = async (req, res) => {
 // @desc    Add comment to complaint
 // @route   POST /api/complaints/:id/comment
 // @access  Private
-const addComment = async (req, res) => {
+exports.addComment = async (req, res) => {
   try {
     const { message } = req.body;
 
@@ -212,32 +258,36 @@ const addComment = async (req, res) => {
     }
 
     // Check if user has access to this complaint
-    if (req.user.role === 'student' && complaint.userId.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && 
+        complaint.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied to comment on this complaint'
+        message: 'Access denied to this complaint'
       });
     }
 
-    complaint.comments.push({
+    const comment = {
       user: req.user._id,
       message
-    });
+    };
 
+    complaint.comments.push(comment);
     await complaint.save();
-    await complaint.populate('comments.user', 'fullName role');
+
+    // Populate the new comment's user data
+    await complaint.populate('comments.user', 'fullName');
 
     const newComment = complaint.comments[complaint.comments.length - 1];
 
     res.status(201).json({
       success: true,
-      comment: newComment
+      data: newComment
     });
   } catch (error) {
+    console.error('Add comment error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error adding comment',
-      error: error.message
+      message: 'Server error while adding comment'
     });
   }
 };
@@ -245,31 +295,23 @@ const addComment = async (req, res) => {
 // @desc    Get user's complaints
 // @route   GET /api/complaints/user/my-complaints
 // @access  Private
-const getMyComplaints = async (req, res) => {
+exports.getMyComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find({ userId: req.user._id })
+      .populate('userId', 'fullName matricNo')
       .populate('assignedTo', 'fullName')
+      .populate('comments.user', 'fullName')
       .sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      complaints
+      data: complaints
     });
   } catch (error) {
+    console.error('Get my complaints error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching your complaints',
-      error: error.message
+      message: 'Server error while fetching complaints'
     });
   }
-};
-
-module.exports = {
-  getComplaints,
-  getComplaint,
-  createComplaint,
-  updateComplaint,
-  updateComplaintStatus,
-  addComment,
-  getMyComplaints
 };

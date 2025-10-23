@@ -13,6 +13,13 @@ router.get('/', auth, adminAuth, async (req, res) => {
     
     const filter = {};
     if (role) filter.role = role;
+    if (req.query.q) {
+      const q = req.query.q;
+      filter.$or = [
+        { fullName: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } }
+      ];
+    }
 
     const users = await User.find(filter)
       .select('-password')

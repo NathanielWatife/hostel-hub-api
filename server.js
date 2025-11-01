@@ -31,22 +31,53 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS
-app.use(cors({
-  origin: process.env.CLIENT_URL,
-  credentials: true
-}));
+// Use only CLIENT_URL; normalize by removing trailing slashes to avoid mismatches
+const allowedOrigin = (process.env.CLIENT_URL || '').trim().replace(/\/+$/, '');
+
+const corsOptions = {
+  origin(origin, callback) {
+    // Allow non-browser or same-origin requests with no Origin header
+    if (!origin) return callback(null, true);
+    const normalized = origin.replace(/\/+$/, '');
+    if (normalized === allowedOrigin) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+
+app.use(cors(corsOptions));
+// Explicitly handle preflight for all routes
+app.options('*', cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+// Keep existing '/api' namespace
 app.use('/api/auth', authRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 
-// Health check route
+// Also expose routes at root for environments where the API is served from '/'
+app.use('/auth', authRoutes);
+app.use('/complaints', complaintRoutes);
+app.use('/lost-found', lostFoundRoutes);
+
+// Health check routes
 app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'HostelHub API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'HostelHub API is running',

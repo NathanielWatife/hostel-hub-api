@@ -51,7 +51,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 // Explicitly handle preflight for all routes
-app.options('*', cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
+// Fallback OPTIONS handler to ensure 204 for any unmatched route
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));

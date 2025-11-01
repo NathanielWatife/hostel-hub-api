@@ -10,6 +10,7 @@ const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth');
 const complaintRoutes = require('./routes/complaints');
 const lostFoundRoutes = require('./routes/lostFound');
+const usersRoutes = require('./routes/users');
 
 // Connect to database
 connectDB();
@@ -67,11 +68,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
+app.use('/api/users', usersRoutes);
 
 // Also expose routes at root for environments where the API is served from '/'
 app.use('/auth', authRoutes);
 app.use('/complaints', complaintRoutes);
 app.use('/lost-found', lostFoundRoutes);
+app.use('/users', usersRoutes);
 
 // Health check routes
 app.get('/api/health', (req, res) => {

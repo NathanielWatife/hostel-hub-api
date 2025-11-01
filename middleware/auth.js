@@ -51,3 +51,22 @@ const adminAuth = (req, res, next) => {
 };
 
 module.exports = { auth, adminAuth };
+/**
+ * Flexible role-based guard
+ * Usage: router.put(path, auth, requireRole('admin','staff'), handler)
+ */
+const requireRole = (...roles) => (req, res, next) => {
+  try {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Insufficient role.'
+      });
+    }
+    return next();
+  } catch (err) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+};
+
+module.exports.requireRole = requireRole;

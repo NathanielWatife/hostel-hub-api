@@ -8,7 +8,7 @@ const {
   addComment,
   getMyComplaints
 } = require('../controllers/complaintController');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -30,8 +30,8 @@ router.post('/', createComplaint);
 // PUT /api/complaints/:id - Update complaint
 router.put('/:id', updateComplaint);
 
-// PUT /api/complaints/:id/status - Update complaint status
-router.put('/:id/status', updateComplaintStatus);
+// PUT /api/complaints/:id/status - Update complaint status (admin/staff only)
+router.put('/:id/status', requireRole('admin', 'staff'), updateComplaintStatus);
 
 // POST /api/complaints/:id/comment - Add comment to complaint
 router.post('/:id/comment', addComment);

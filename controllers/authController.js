@@ -231,3 +231,86 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+// @desc    Bootstrap: create the first admin (HTTP alternative to CLI)
+// @route   POST /api/auth/bootstrap-admin
+// @access  Protected by env flag; only when no admin exists
+exports.bootstrapAdmin = async (req, res) => {
+  try {
+    // Guard with environment flag to disable in production by default
+    if (process.env.ENABLE_ADMIN_BOOTSTRAP !== 'true') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin bootstrap is disabled'
+      });
+    }
+
+    // Ensure no admin exists yet (one-time bootstrap)
+    const adminExists = await User.exists({ role: 'admin' });
+    if (adminExists) {
+      return res.status(409).json({
+        success: false,
+        message: 'Admin already exists. Bootstrap not allowed.'
+      });
+    }
+
+    const { email, fullName, password } = req.body || {};
+
+    if (!email || !fullName || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'email, fullName and password are required'
+      });
+    }
+
+    // If a user with this email exists (e.g., pre-registered student), promote to admin
+    let user = await User.findOne({ email: String(email).toLowerCase() });
+
+    if (user) {
+      user.role = 'admin';
+      user.fullName = fullName; // allow updating display name during bootstrap
+      user.password = password; // will be hashed by pre-save hook
+      await user.save();
+    } else {
+      user = await User.create({
+        email: String(email).toLowerCase(),
+        fullName,
+        password,
+        role: 'admin'
+      });
+    }
+
+    const token = generateToken(user._id);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Admin account bootstrapped successfully',
+      token,
+      user
+    });
+  } catch (error) {
+    console.error('Bootstrap admin error:', error);
+
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        details: messages
+      });
+    }
+
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(409).json({
+        success: false,
+        message: `Duplicate ${field}`
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during admin bootstrap'
+    });
+  }
+};

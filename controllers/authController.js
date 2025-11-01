@@ -84,21 +84,33 @@ exports.register = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { matricNo, password } = req.body;
+    const { matricNo, email, identifier, password } = req.body;
 
     // Validate input
-    if (!matricNo || !password) {
+    if (!password || (!matricNo && !email && !identifier)) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide university ID and password'
+        message: 'Please provide email/matric and password'
       });
     }
 
+    // Determine lookup field: prioritize identifier, then email, then matricNo
+    let query = { isActive: true };
+    if (identifier) {
+      // Simple heuristic: contains @ means email, else matric
+      if (identifier.includes('@')) {
+        query.email = identifier.toLowerCase();
+      } else {
+        query.matricNo = identifier.toUpperCase();
+      }
+    } else if (email) {
+      query.email = email.toLowerCase();
+    } else if (matricNo) {
+      query.matricNo = matricNo.toUpperCase();
+    }
+
     // Check if user exists and is active
-    const user = await User.findOne({ 
-      matricNo: matricNo.toUpperCase(),
-      isActive: true 
-    });
+    const user = await User.findOne(query);
 
     if (!user) {
       return res.status(401).json({

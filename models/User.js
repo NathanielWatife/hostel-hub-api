@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   matricNo: {
     type: String,
-    required: [true, 'University ID is required'],
+    required: [function() { return this.role !== 'admin'; }, 'University ID is required'],
     unique: true,
     trim: true,
     uppercase: true
@@ -34,13 +34,13 @@ const userSchema = new mongoose.Schema({
   },
   hostelBlock: {
     type: String,
-    required: [true, 'Hostel block is required'],
+    required: [function() { return this.role !== 'admin'; }, 'Hostel block is required'],
     trim: true,
     uppercase: true
   },
   roomNumber: {
     type: String,
-    required: [true, 'Room number is required'],
+    required: [function() { return this.role !== 'admin'; }, 'Room number is required'],
     trim: true
   },
   phone: {

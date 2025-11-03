@@ -32,27 +32,51 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS
-// Use only CLIENT_URL; normalize by removing trailing slashes to avoid mismatches
-const allowedOrigin = (process.env.CLIENT_URL || '').trim().replace(/\/+$/, '');
+// Allow multiple origins: environment variable CORS_ORIGINS (comma-separated),
+// optional CLIENT_URL, plus sane defaults for local and Vercel preview/prod.
+const envOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const clientUrl = (process.env.CLIENT_URL || '').trim();
+const defaultOrigins = [
+  process.env.CLIENT_URL
+];
+
+// Normalize by removing trailing slashes and deduplicate
+const allowedOrigins = Array.from(
+  new Set([...envOrigins, clientUrl, ...defaultOrigins]
+    .filter(Boolean)
+    .map(o => o.replace(/\/+$/, '')))
+);
+
+// Allow Vercel preview deployments that follow the pattern:
+// https://hostel-hub-<branch>.<user>.vercel.app OR https://hostel-hub-<suffix>.vercel.app
+const vercelPreviewRegex = /^https:\/\/hostel-hub(?:-[a-z0-9-]+)?\.vercel\.app$/i;
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // non-browser or same-origin requests
+  const normalized = origin.replace(/\/+$/, '');
+  if (allowedOrigins.includes(normalized)) return true;
+  if (vercelPreviewRegex.test(normalized)) return true;
+  return false;
+}
 
 const corsOptions = {
   origin(origin, callback) {
-    // Allow non-browser or same-origin requests with no Origin header
-    if (!origin) return callback(null, true);
-    const normalized = origin.replace(/\/+$/, '');
-    if (normalized === allowedOrigin) {
-      return callback(null, true);
-    }
+    if (isAllowedOrigin(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
 };
 
 app.use(cors(corsOptions));
 // Explicitly handle preflight for all routes
-app.options(/.*/, cors(corsOptions));
+app.options('*', cors(corsOptions));
 // Fallback OPTIONS handler to ensure 204 for any unmatched route
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);

@@ -50,7 +50,6 @@ const adminAuth = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, adminAuth };
 /**
  * Flexible role-based guard
  * Usage: router.put(path, auth, requireRole('admin','staff'), handler)
@@ -69,4 +68,4 @@ const requireRole = (...roles) => (req, res, next) => {
   }
 };
 
-module.exports.requireRole = requireRole;
+module.exports = { auth, adminAuth, requireRole };

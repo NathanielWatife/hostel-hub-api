@@ -18,7 +18,7 @@ router.use(auth);
 // GET /api/complaints - Get all complaints (with filters)
 router.get('/', getAllComplaints);
 
-// GET /api/complaints/user/my-complaints - Get user's complaints
+// GET /api/complaints/user/my-complaints - Get user's complaints (MUST be before /:id)
 router.get('/user/my-complaints', getMyComplaints);
 
 // GET /api/complaints/:id - Get single complaint

@@ -86,14 +86,15 @@ const complaintSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate ticket number before saving
+// Generate ticket number before saving (using timestamp + random to avoid race conditions)
 complaintSchema.pre('save', async function(next) {
   if (this.isNew) {
-    const count = await mongoose.model('Complaint').countDocuments();
+    // Use timestamp + random suffix to ensure uniqueness in high concurrency
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     const prefix = 'HOSTEL';
     const year = new Date().getFullYear();
-    const sequential = (count + 1).toString().padStart(4, '0');
-    this.ticketNumber = `${prefix}-${year}-${sequential}`;
+    this.ticketNumber = `${prefix}-${year}-${timestamp}${random}`;
   }
   next();
 });

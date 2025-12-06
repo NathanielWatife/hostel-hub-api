@@ -32,8 +32,6 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS
-// Allow multiple origins: environment variable CORS_ORIGINS (comma-separated),
-// optional CLIENT_URL, plus sane defaults for local and Vercel preview/prod.
 const envOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(s => s.trim())

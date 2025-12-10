@@ -27,8 +27,19 @@ const limiter = rateLimit({
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
+  },
+  keyGenerator: (req, res) => {
+    // Use X-Forwarded-For header for accurate IP on Vercel
+    return req.headers['x-forwarded-for']?.split(',')[0] || req.ip;
+  },
+  skip: (req, res) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
   }
 });
+
+// Trust proxy for accurate client IP
+app.set('trust proxy', 1);
 app.use(limiter);
 
 // CORS
